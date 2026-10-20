@@ -1,7 +1,10 @@
 {
   "name": "@astrosheep/pi-ask",
-  "version": "0.1.0",
-  "repository": { "type": "git", "url": "git+https://github.com/astrosheep-zero/pi-ask.git" },
+  "version": "0.1.1",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/astrosheep-zero/pi-ask.git"
+  },
   "publishConfig": {
     "access": "public"
   },

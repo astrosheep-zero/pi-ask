@@ -41,13 +41,15 @@ TUI sessions retain **`ask_user`** and the existing 1–4 question, 2–6 option
 
 | Key | Action |
 |---|---|
-| `1`–`9` | Pick an option |
+| `1`–`9` | Pick an option; for `Type something.`, focus the row |
 | `↑` / `↓` | Move selection |
 | `Enter` | Confirm / save |
 | `n` | Per-question note; on Submit tab, global note |
 | `s` | Skip this question (toggle; counts toward Submit) |
 | `Tab` / `←` / `→` | Switch tabs for multiple questions |
 | `Esc` | Discard text edit, or dismiss questionnaire |
+
+Select `Type something.` and press **Enter** to edit directly on that row. Ordinary typing does not activate editing. Multi-line input stays inline; Esc discards it and returns to selection.
 
 Single-question selection submits immediately; `s` there submits the question as skipped. Multiple questions have a Submit tab with an answer summary. Skipped questions are distinct from both answers and dismissal: the summary tells the model to decide them with its own judgment. This terminal interface is unchanged otherwise; RPC does not emulate its controls with menus.
 

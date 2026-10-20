@@ -67,6 +67,8 @@ export async function runAskDialog(ctx: ExtensionContext, questions: Question[])
 			let optionIndex = 0;
 			let input: null | "answer" | "note" | "global" = null;
 			let cachedLines: string[] | undefined;
+			let cachedWidth = 0;
+			let focused = false;
 			const model = new Questionnaire(questions);
 			const { answers, notes, skipped } = model;
 
@@ -110,6 +112,7 @@ export async function runAskDialog(ctx: ExtensionContext, questions: Question[])
 				const opt = renderOptionsFor(q)[index];
 				if (!opt) return;
 				if (opt.isOther) {
+					optionIndex = index;
 					input = "answer";
 					editor.setText("");
 					refresh();
@@ -210,7 +213,11 @@ export async function runAskDialog(ctx: ExtensionContext, questions: Question[])
 
 				// The whole point of this fork: number keys pick directly.
 				if (/^[1-9]$/.test(data)) {
-					pickOption(Number(data) - 1);
+					const index = Number(data) - 1;
+					if (opts[index]?.isOther) {
+						optionIndex = index;
+						refresh();
+					} else pickOption(index);
 					return;
 				}
 
@@ -234,10 +241,12 @@ export async function runAskDialog(ctx: ExtensionContext, questions: Question[])
 			}
 
 			function render(width: number): string[] {
-				if (cachedLines) return cachedLines;
+				if (cachedLines && cachedWidth === width) return cachedLines;
+				cachedWidth = width;
+				editor.focused = focused && input !== null;
 
 				const onSubmitTab = currentTab === questions.length;
-				const title = !isMulti ? "✦ Question" : onSubmitTab ? "✦ Review" : `✦ ${questions[currentTab].label}`;
+				const title = !isMulti ? "Question" : onSubmitTab ? "Review" : questions[currentTab].label;
 				const box = makeChrome(theme, Math.max(20, width), title);
 				const rows: string[] = [box.top];
 				const q = questions[currentTab];
@@ -267,20 +276,33 @@ export async function runAskDialog(ctx: ExtensionContext, questions: Question[])
 							: theme.fg(model.complete ? "success" : "dim", submitText),
 					);
 					pills.push(theme.fg("dim", "→"));
-					rows.push(box.line(pills.join(" ")));
+					rows.push(...box.wrapped(pills.join(" ")));
 				}
 				rows.push(box.line());
+
+				function renderEditor(prefix = "") {
+					const lines = editor.render(Math.max(1, box.inner - visibleWidth(prefix)));
+					// Remove plain editor borders, but retain its overflow indicators.
+					const content = lines.filter((line, i) =>
+						(i > 0 && i < lines.length - 1) || /[↑↓]/u.test(line));
+					rows.push(...content.map((line, i) =>
+						(i === 0 ? prefix : " ".repeat(visibleWidth(prefix))) + line));
+				}
 
 				function renderOptionList() {
 					for (let i = 0; i < opts.length; i++) {
 						const opt = opts[i];
 						const selected = i === optionIndex;
 						const editing = opt.isOther === true && input === "answer";
+						if (editing) {
+							renderEditor(theme.fg("accent", `❯ ${i + 1}. `));
+							continue;
+						}
 
 						const badge = theme.fg(selected ? "accent" : "dim", `${i + 1}`);
 						const star = opt.recommended ? theme.fg("success", " ★") : "";
 						const cursor = selected ? theme.fg("accent", "❯ ") : "  ";
-						const name = `${badge}${theme.fg("dim", ".")} ${opt.label}${editing ? " ✎" : ""}${star}`;
+						const name = `${badge}${theme.fg("dim", ".")} ${opt.label}${star}`;
 						const labelLine = `${cursor}${selected ? theme.fg("accent", theme.bold(name)) : theme.fg("text", name)}`;
 
 						if (selected) {
@@ -311,10 +333,9 @@ export async function runAskDialog(ctx: ExtensionContext, questions: Question[])
 					} else {
 						rows.push(box.line(theme.fg("muted", "Attached to every answer in this questionnaire.")));
 					}
-					rows.push(box.line());
-					rows.push(box.line(theme.fg("muted", inputLabel)));
-					for (const line of editor.render(box.inner)) {
-						rows.push(box.line(line));
+					if (input !== "answer") {
+						rows.push(box.line(theme.fg("muted", inputLabel)));
+						renderEditor();
 					}
 					rows.push(box.line());
 					rows.push(box.line(rawKeyHint("enter", "save") + theme.fg("dim", "  ·  ") + rawKeyHint("esc", "discard")));
@@ -372,7 +393,7 @@ export async function runAskDialog(ctx: ExtensionContext, questions: Question[])
 					const hints = isMulti
 						? [rawKeyHint("1-9", "pick"), rawKeyHint("↑↓", "move"), rawKeyHint("tab", "switch"), rawKeyHint("n", "note"), rawKeyHint("s", "skip"), rawKeyHint("enter", "confirm"), rawKeyHint("esc", "dismiss")]
 						: [rawKeyHint("1-9", "pick"), rawKeyHint("↑↓", "move"), rawKeyHint("n", "note"), rawKeyHint("s", "skip"), rawKeyHint("enter", "confirm"), rawKeyHint("esc", "dismiss")];
-					rows.push(box.line(hints.join(theme.fg("dim", "  ·  "))));
+					rows.push(...box.wrapped(hints.join(theme.fg("dim", "  ·  "))));
 				}
 				rows.push(box.bottom);
 
@@ -381,6 +402,11 @@ export async function runAskDialog(ctx: ExtensionContext, questions: Question[])
 			}
 
 			return {
+				get focused() { return focused; },
+				set focused(value: boolean) {
+					focused = value;
+					refresh();
+				},
 				render,
 				invalidate: () => {
 					cachedLines = undefined;
